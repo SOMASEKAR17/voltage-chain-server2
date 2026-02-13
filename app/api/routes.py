@@ -233,6 +233,123 @@ async def test_prediction_endpoint():
     return await predict_rul(example_data)
 
 
+def calculate_battery_degradation(survey_data: UserSurveyInput) -> Dict:
+    """
+    Calculate battery degradation using heuristic-based algorithm.
+    No external API required.
+    
+    Args:
+        survey_data: User survey input
+        
+    Returns:
+        Dict with 'predicted_capacity', 'confidence', 'explanation'
+    """
+    
+    # Base degradation factors
+    soh = 100.0  # Start at 100%
+    
+    # 1. Time-based degradation (calendric aging)
+    # ~2-3% per year at room temperature
+    years_degradation = survey_data.years_owned * 2.5
+    soh -= years_degradation
+    
+    # 2. Usage intensity degradation
+    usage_factor = {
+        "Light": 0.5,      # 0.5% per year
+        "Medium": 1.5,     # 1.5% per year
+        "Heavy": 3.0       # 3.0% per year
+    }.get(survey_data.avg_daily_usage, 1.5)
+    
+    usage_degradation = survey_data.years_owned * usage_factor
+    soh -= usage_degradation
+    
+    # 3. Charging pattern impact
+    charging_factor = {
+        "20-80": 0.3,          # Conservative - minimal stress
+        "0-100": 1.0,          # Moderate stress
+        "Always Full": 1.8     # Maximum stress
+    }.get(survey_data.typical_charge_level, 1.0)
+    
+    charging_degradation = survey_data.years_owned * charging_factor
+    soh -= charging_degradation
+    
+    # 4. Temperature effects (exponential)
+    # 25°C is optimal
+    temp_delta = abs(survey_data.avg_temperature - 25.0)
+    temp_factor = 1.0 + (temp_delta / 10.0) * 0.5  # 50% more degradation per 10°C
+    temp_degradation = years_degradation * temp_factor * 0.3
+    soh -= min(temp_degradation, 15.0)  # Cap at 15% additional
+    
+    # 5. Application type
+    app_factor = {
+        "E-bike": 1.0,
+        "E-car": 1.3  # Higher stress from intensive cycling
+    }.get(survey_data.primary_application, 1.0)
+    
+    total_degradation = (years_degradation + usage_degradation + 
+                        charging_degradation + temp_degradation)
+    app_adjustment = total_degradation * (app_factor - 1.0) * 0.5
+    soh -= app_adjustment
+    
+    # Clamp SOH to 0-100%
+    soh = max(0, min(100, soh))
+    
+    # Calculate confidence score
+    # Higher confidence for longer ownership (more data points)
+    base_confidence = 70 + (survey_data.years_owned * 5)
+    
+    # Adjust confidence based on usage patterns
+    if survey_data.years_owned == 0:
+        confidence = 95  # New battery - high confidence
+    elif survey_data.years_owned >= 3:
+        confidence = min(85, base_confidence)  # Mature data
+    else:
+        confidence = min(80, base_confidence)
+    
+    # Build explanation
+    total_loss = 100 - soh
+    explanation = f"""
+Battery Condition Analysis (Heuristic-Based Prediction)
+
+Input Summary:
+- Battery: {survey_data.brand_model}
+- Initial Capacity: {survey_data.initial_capacity} Ahr
+- Ownership: {survey_data.years_owned} years
+- Primary Use: {survey_data.primary_application}
+- Daily Usage: {survey_data.avg_daily_usage}
+- Charging Pattern: {survey_data.typical_charge_level}
+- Operating Temp: {survey_data.avg_temperature}°C
+
+Degradation Analysis:
+1. Time-based aging: {years_degradation:.1f}% (2.5% per year baseline)
+2. Usage intensity: {usage_degradation:.1f}% ({survey_data.avg_daily_usage.lower()} = {usage_factor}% per year)
+3. Charging pattern: {charging_degradation:.1f}% ({survey_data.typical_charge_level} pattern)
+4. Temperature impact: {temp_degradation:.1f}% (offset from 25°C baseline)
+5. Application impact: {app_adjustment:.1f}% (E-car has higher stress)
+
+Total Estimated Degradation: {total_loss:.1f}%
+Predicted State of Health (SOH): {soh:.1f}%
+
+Predicted Current Capacity: {survey_data.initial_capacity * (soh/100):.2f} Ahr
+
+Confidence: {confidence}% (higher = more reliable)
+- New batteries (<1 year): Very high confidence
+- Established patterns (2-5 years): High confidence  
+- Very old batteries (>5 years): Medium confidence (unpredictable degradation)
+
+This prediction is based on typical Li-ion degradation patterns.
+Actual capacity may vary based on storage conditions and usage cycles.
+"""
+    
+    return {
+        "predicted_capacity": survey_data.initial_capacity * (soh / 100),
+        "confidence": confidence,
+        "explanation": explanation,
+        "soh_percentage": soh,
+        "total_degradation_percent": total_loss
+    }
+
+
 def call_gemini_api(prompt: str) -> Dict:
     """
     Call Gemini API with fallback to alternate API keys if one fails.
@@ -252,7 +369,8 @@ def call_gemini_api(prompt: str) -> Dict:
     if not api_keys:
         raise ValueError("No Gemini API keys found in environment variables")
     
-    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    # Using the standard Gemini model endpoint
+    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent"
     
     for attempt, api_key in enumerate(api_keys, 1):
         try:
@@ -360,10 +478,11 @@ def parse_gemini_response(gemini_text: str) -> Dict:
 @router.post("/predict-capacity-survey", response_model=CapacityPredictionResponse)
 async def predict_capacity_from_survey(survey_data: UserSurveyInput):
     """
-    Predict battery current capacity based on user survey responses using Gemini API.
+    Predict battery current capacity based on user survey responses using heuristic algorithm.
     
     This endpoint takes user-provided information about battery usage patterns and history,
-    then uses Gemini AI to predict the likely current capacity of the battery.
+    then uses a statistical degradation model to predict the likely current capacity of the battery.
+    No external API required - uses local calculation.
     
     Args:
         survey_data: User survey with battery information and usage patterns
@@ -372,46 +491,14 @@ async def predict_capacity_from_survey(survey_data: UserSurveyInput):
         CapacityPredictionResponse: Predicted capacity, confidence, and explanation
     """
     try:
-        # Build prompt for Gemini
-        prompt = f"""You are an expert battery analyst. Based on the following user survey data about a battery, 
-predict the current capacity of the battery in Ahr (Ampere-hours).
-
-Battery Information:
-- Brand/Model: {survey_data.brand_model}
-- Initial Capacity: {survey_data.initial_capacity} Ahr
-- Years Owned: {survey_data.years_owned}
-- Primary Application: {survey_data.primary_application}
-- Average Daily Usage: {survey_data.avg_daily_usage}
-- Charging Frequency: {survey_data.charging_frequency_in_week} times per week
-- Typical Charge Level: {survey_data.typical_charge_level}
-- Average Operating Temperature: {survey_data.avg_temperature}°C
-
-Based on this information, estimate the current capacity of the battery in Ahr. 
-Consider battery degradation from:
-1. Age (ownership duration)
-2. Usage intensity and frequency
-3. Charging patterns (especially if frequently charged to full or deeply discharged)
-4. Temperature conditions
-5. Application type
-
-Provide your response in the following format:
-- Predicted Current Capacity: [X.XX] Ahr
-- Confidence Level: [0-100]%
-- Explanation: [Your detailed analysis of why you predicted this capacity]
-
-Be realistic about degradation rates for the given conditions."""
-
-        # Call Gemini API with fallback keys
-        gemini_response = call_gemini_api(prompt)
-        
-        # Parse the response
-        prediction = parse_gemini_response(gemini_response['generated_text'])
+        # Calculate degradation using local heuristic model
+        prediction = calculate_battery_degradation(survey_data)
         
         return CapacityPredictionResponse(
             success=True,
             predicted_current_capacity=round(prediction['predicted_capacity'], 2),
             confidence=min(100, max(0, prediction['confidence'])),
-            explanation=prediction['explanation'],
+            explanation=prediction['explanation'].strip(),
             input_summary={
                 "brand_model": survey_data.brand_model,
                 "initial_capacity_ahr": survey_data.initial_capacity,
@@ -421,7 +508,9 @@ Be realistic about degradation rates for the given conditions."""
                 "charging_frequency_per_week": survey_data.charging_frequency_in_week,
                 "typical_charge_level": survey_data.typical_charge_level,
                 "avg_temperature_c": survey_data.avg_temperature,
-                "api_key_used": f"Key #{gemini_response['api_key_index']}"
+                "method": "Heuristic Degradation Model (No External API)",
+                "soh_percentage": round(prediction['soh_percentage'], 1),
+                "total_degradation_percent": round(prediction['total_degradation_percent'], 1)
             }
         )
     
