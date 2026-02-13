@@ -3,6 +3,12 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from app.services.battery_service import predict_battery_rul, get_health_status, get_recommendations
 import math
+import os
+import requests
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 router = APIRouter(
     prefix="/api",
@@ -33,6 +39,28 @@ class BatteryHealthStatus(BaseModel):
     soh_percentage: float = Field(description="State of Health as percentage (0-100)")
     health_status: str = Field(description="Health status category (EXCELLENT, GOOD, FAIR, POOR, CRITICAL)")
     health_description: str = Field(description="Description of health status")
+
+
+class UserSurveyInput(BaseModel):
+    """User survey input for battery capacity prediction via Gemini API"""
+    listing_id: str = Field(..., description="Listing ID (UUID)")
+    brand_model: str = Field(..., description="Battery brand and model (e.g., 'Samsung 18650')")
+    initial_capacity: float = Field(..., gt=0, description="Initial capacity in Ahr (e.g., 3.0)")
+    years_owned: int = Field(..., ge=0, description="Years the battery has been owned")
+    primary_application: str = Field(..., description="Primary use: 'E-bike' or 'E-car'")
+    avg_daily_usage: str = Field(..., description="Daily usage intensity: 'Light', 'Medium', or 'Heavy'")
+    charging_frequency_in_week: int = Field(..., ge=0, description="Number of charge cycles per week")
+    typical_charge_level: str = Field(..., description="Typical charge level: '20-80', '0-100', or 'Always Full'")
+    avg_temperature: float = Field(default=25.0, description="Average operating temperature in °C")
+
+
+class CapacityPredictionResponse(BaseModel):
+    """Response from Gemini-based capacity prediction"""
+    success: bool = Field(True, description="Whether prediction was successful")
+    predicted_current_capacity: float = Field(description="Predicted current capacity in Ahr")
+    confidence: float = Field(description="Confidence score of the prediction (0-100)")
+    explanation: str = Field(description="Explanation of the prediction")
+    input_summary: Dict = Field(description="Summary of input survey data")
 
 
 @router.get("/health")
@@ -106,7 +134,7 @@ async def predict_rul(battery_data: SimpleBatteryInput):
             'temp_max': battery_data.ambient_temperature + 2,
             'temp_range': 5.0,
             'power_mean': 7.6,
-            'power_max': 9.2
+            'power_max': 9.2    
         }
         
         # Get prediction from model
@@ -203,6 +231,204 @@ async def test_prediction_endpoint():
     )
     
     return await predict_rul(example_data)
+
+
+def call_gemini_api(prompt: str) -> Dict:
+    """
+    Call Gemini API with fallback to alternate API keys if one fails.
+    
+    Args:
+        prompt: The prompt to send to Gemini API
+        
+    Returns:
+        Dict with 'predicted_capacity', 'confidence', and 'explanation'
+    """
+    api_keys = [
+        os.getenv(f"GEMINI_API_KEY_{i}") 
+        for i in range(1, 6) 
+        if os.getenv(f"GEMINI_API_KEY_{i}")
+    ]
+    
+    if not api_keys:
+        raise ValueError("No Gemini API keys found in environment variables")
+    
+    gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    for attempt, api_key in enumerate(api_keys, 1):
+        try:
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            response = requests.post(
+                f"{gemini_url}?key={api_key}",
+                json=payload,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                # Extract text from Gemini response
+                try:
+                    generated_text = response_data['candidates'][0]['content']['parts'][0]['text']
+                    return {
+                        "generated_text": generated_text,
+                        "api_key_index": attempt
+                    }
+                except (KeyError, IndexError) as e:
+                    raise ValueError(f"Unexpected response format from Gemini API: {str(e)}")
+            
+            elif response.status_code == 429:
+                # Rate limit error - try next key
+                continue
+            elif response.status_code == 401:
+                # Invalid API key - try next one
+                continue
+            else:
+                raise ValueError(f"API error {response.status_code}: {response.text}")
+                
+        except requests.exceptions.RequestException as e:
+            if attempt == len(api_keys):
+                raise ValueError(f"All API keys failed. Last error: {str(e)}")
+            continue
+    
+    raise ValueError(f"All {len(api_keys)} Gemini API keys failed or rate limited")
+
+
+def parse_gemini_response(gemini_text: str) -> Dict:
+    """
+    Parse Gemini API response to extract predicted capacity, confidence, and explanation.
+    
+    Args:
+        gemini_text: Text response from Gemini API
+        
+    Returns:
+        Dict with 'predicted_capacity', 'confidence', 'explanation'
+    """
+    import re
+    
+    # Initialize defaults
+    predicted_capacity = None
+    confidence = 70.0
+    explanation = gemini_text
+    
+    # Try to extract predicted capacity (look for patterns like "2.5 Ahr", "2.5 Ah", etc.)
+    capacity_patterns = [
+        r"predicted.*?capacity[:\s]+([0-9.]+)\s*Ahr?",
+        r"current.*?capacity[:\s]+([0-9.]+)\s*Ahr?",
+        r"Capacity[:\s]+([0-9.]+)\s*Ahr?",
+        r"([0-9.]+)\s*Ahr?",  # Fallback to any decimal followed by Ahr/Ah
+    ]
+    
+    for pattern in capacity_patterns:
+        match = re.search(pattern, gemini_text, re.IGNORECASE)
+        if match:
+            predicted_capacity = float(match.group(1))
+            break
+    
+    # Try to extract confidence (look for percentage)
+    confidence_pattern = r"confidence[:\s]+([0-9.]+)\s*%?"
+    confidence_match = re.search(confidence_pattern, gemini_text, re.IGNORECASE)
+    if confidence_match:
+        confidence = float(confidence_match.group(1))
+        if confidence > 100:
+            confidence = 100
+    
+    if predicted_capacity is None:
+        raise ValueError("Could not extract predicted capacity from Gemini response")
+    
+    return {
+        "predicted_capacity": predicted_capacity,
+        "confidence": confidence,
+        "explanation": gemini_text
+    }
+
+
+@router.post("/predict-capacity-survey", response_model=CapacityPredictionResponse)
+async def predict_capacity_from_survey(survey_data: UserSurveyInput):
+    """
+    Predict battery current capacity based on user survey responses using Gemini API.
+    
+    This endpoint takes user-provided information about battery usage patterns and history,
+    then uses Gemini AI to predict the likely current capacity of the battery.
+    
+    Args:
+        survey_data: User survey with battery information and usage patterns
+        
+    Returns:
+        CapacityPredictionResponse: Predicted capacity, confidence, and explanation
+    """
+    try:
+        # Build prompt for Gemini
+        prompt = f"""You are an expert battery analyst. Based on the following user survey data about a battery, 
+predict the current capacity of the battery in Ahr (Ampere-hours).
+
+Battery Information:
+- Brand/Model: {survey_data.brand_model}
+- Initial Capacity: {survey_data.initial_capacity} Ahr
+- Years Owned: {survey_data.years_owned}
+- Primary Application: {survey_data.primary_application}
+- Average Daily Usage: {survey_data.avg_daily_usage}
+- Charging Frequency: {survey_data.charging_frequency_in_week} times per week
+- Typical Charge Level: {survey_data.typical_charge_level}
+- Average Operating Temperature: {survey_data.avg_temperature}°C
+
+Based on this information, estimate the current capacity of the battery in Ahr. 
+Consider battery degradation from:
+1. Age (ownership duration)
+2. Usage intensity and frequency
+3. Charging patterns (especially if frequently charged to full or deeply discharged)
+4. Temperature conditions
+5. Application type
+
+Provide your response in the following format:
+- Predicted Current Capacity: [X.XX] Ahr
+- Confidence Level: [0-100]%
+- Explanation: [Your detailed analysis of why you predicted this capacity]
+
+Be realistic about degradation rates for the given conditions."""
+
+        # Call Gemini API with fallback keys
+        gemini_response = call_gemini_api(prompt)
+        
+        # Parse the response
+        prediction = parse_gemini_response(gemini_response['generated_text'])
+        
+        return CapacityPredictionResponse(
+            success=True,
+            predicted_current_capacity=round(prediction['predicted_capacity'], 2),
+            confidence=min(100, max(0, prediction['confidence'])),
+            explanation=prediction['explanation'],
+            input_summary={
+                "brand_model": survey_data.brand_model,
+                "initial_capacity_ahr": survey_data.initial_capacity,
+                "years_owned": survey_data.years_owned,
+                "primary_application": survey_data.primary_application,
+                "avg_daily_usage": survey_data.avg_daily_usage,
+                "charging_frequency_per_week": survey_data.charging_frequency_in_week,
+                "typical_charge_level": survey_data.typical_charge_level,
+                "avg_temperature_c": survey_data.avg_temperature,
+                "api_key_used": f"Key #{gemini_response['api_key_index']}"
+            }
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Capacity prediction error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error during prediction: {str(e)}")
 
 
 # Import metadata at module level for use in endpoints
