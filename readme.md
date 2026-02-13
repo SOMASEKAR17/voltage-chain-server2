@@ -1,3 +1,7 @@
+## Frontend - https://github.com/SOMASEKAR17/voltage-chain-frontend
+## Server1 - https://github.com/SOMASEKAR17/voltage-chain-server1
+## Server2 - https://github.com/SOMASEKAR17/voltage-chain-server2
+
 # Battery NFT Marketplace – ML Service (FastAPI)
 
 ## Overview
