@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-02-14T02:48:22.238338",
+  "timestamp": "2026-02-14T03:18:13.743046",
   "battery_metrics": {
     "initial_capacity": 3.0,
     "current_capacity": 2.0,
     "cycle_count": 40,
-    "age_days": 200.0
+    "age_days": 300.0
   },
   "health_status": {
     "SoH": 0.6666666666666666,
@@ -12,7 +12,7 @@
     "description": "Significant degradation, limited lifespan"
   },
   "predictions": {
-    "predicted_rul_cycles": 50.345797064483584,
+    "predicted_rul_cycles": 51.30671245836104,
     "model_r2_score": 0.9846408284192322
   },
   "recommendations": [

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Voltage Chain Battery Prediction API provides endpoints for predicting battery health, remaining useful life (RUL), and receiving recommendations based on battery metrics and cycle features.
+The Voltage Chain Battery Prediction API provides endpoints for predicting battery health, remaining useful life (RUL), and receiving recommendations based on simplified battery metrics.
 
 **Base URL:** `http://localhost:8000/api`
 
@@ -37,11 +37,11 @@ curl -X GET "http://localhost:8000/api/health"
 
 ---
 
-### 2. Battery RUL Prediction
+### 2. Battery RUL Prediction (Simplified)
 
 **Endpoint:** [POST `/api/predict-rul`]
 
-**Description:** Predict battery Remaining Useful Life (RUL) based on comprehensive battery parameters and cycle features.
+**Description:** Predict battery Remaining Useful Life (RUL) based on essential battery parameters. This simplified interface accepts only the core metrics needed for reliable predictions.
 
 **Method:** `POST`
 
@@ -49,73 +49,13 @@ curl -X GET "http://localhost:8000/api/health"
 
 **Request Body Parameters:**
 
-#### Cycle Features
-
-| Parameter           | Type  | Required | Default | Description                            |
-| ------------------- | ----- | -------- | ------- | -------------------------------------- |
-| `cycle_duration`    | float | ✅ Yes   | -       | Duration of discharge cycle in seconds |
-| `measurement_count` | int   | ❌ No    | 1000    | Number of measurements in cycle        |
-
-#### Voltage Features
-
-| Parameter       | Type  | Required | Default | Description                   |
-| --------------- | ----- | -------- | ------- | ----------------------------- |
-| `voltage_mean`  | float | ❌ No    | 3.8     | Mean voltage during cycle (V) |
-| `voltage_std`   | float | ❌ No    | 0.1     | Voltage standard deviation    |
-| `voltage_min`   | float | ❌ No    | 3.5     | Minimum voltage (V)           |
-| `voltage_max`   | float | ❌ No    | 4.2     | Maximum voltage (V)           |
-| `voltage_range` | float | ❌ No    | 0.7     | Voltage range (max-min)       |
-| `voltage_drop`  | float | ❌ No    | 0.5     | Voltage drop during cycle     |
-
-#### Current Features
-
-| Parameter      | Type  | Required | Default | Description                |
-| -------------- | ----- | -------- | ------- | -------------------------- |
-| `current_mean` | float | ❌ No    | -2.0    | Mean current (A)           |
-| `current_std`  | float | ❌ No    | 0.1     | Current standard deviation |
-| `current_min`  | float | ❌ No    | -2.2    | Minimum current (A)        |
-| `current_max`  | float | ❌ No    | -1.8    | Maximum current (A)        |
-
-#### Temperature Features
-
-| Parameter    | Type  | Required | Default | Description                    |
-| ------------ | ----- | -------- | ------- | ------------------------------ |
-| `temp_mean`  | float | ❌ No    | 25.0    | Mean temperature (°C)          |
-| `temp_std`   | float | ❌ No    | 2.0     | Temperature standard deviation |
-| `temp_min`   | float | ❌ No    | 23.0    | Minimum temperature (°C)       |
-| `temp_max`   | float | ❌ No    | 28.0    | Maximum temperature (°C)       |
-| `temp_range` | float | ❌ No    | 5.0     | Temperature range (°C)         |
-
-#### Power Features
-
-| Parameter    | Type  | Required | Default | Description       |
-| ------------ | ----- | -------- | ------- | ----------------- |
-| `power_mean` | float | ❌ No    | 7.6     | Mean power (W)    |
-| `power_max`  | float | ❌ No    | 9.2     | Maximum power (W) |
-
-#### Battery Health Metrics
-
-| Parameter             | Type  | Required | Default | Description                       |
-| --------------------- | ----- | -------- | ------- | --------------------------------- |
-| `Capacity`            | float | ✅ Yes   | -       | Current capacity (Ah)             |
-| `ambient_temperature` | float | ❌ No    | 25.0    | Ambient temperature (°C)          |
-| `cycle_count`         | int   | ✅ Yes   | -       | Number of charge/discharge cycles |
-| `age_days`            | float | ✅ Yes   | -       | Battery age in days               |
-| `initial_capacity`    | float | ✅ Yes   | -       | Initial capacity (Ah)             |
-| `SoH`                 | float | ✅ Yes   | -       | State of Health (0.0 - 1.0)       |
-
-#### Degradation Metrics
-
-| Parameter                        | Type  | Required | Default | Description                             |
-| -------------------------------- | ----- | -------- | ------- | --------------------------------------- |
-| `capacity_degradation`           | float | ✅ Yes   | -       | Capacity degradation level (0-1)        |
-| `capacity_slope`                 | float | ✅ Yes   | -       | Rate of capacity loss per cycle         |
-| `normalized_degradation_rate`    | float | ✅ Yes   | -       | Normalized degradation rate             |
-| `capacity_gradient_pct`          | float | ✅ Yes   | -       | Capacity gradient percentage per cycle  |
-| `cycle_utilization`              | float | ✅ Yes   | -       | Cycle utilization ratio (0-1)           |
-| `degradation_acceleration`       | float | ✅ Yes   | -       | Rate of acceleration of degradation     |
-| `daily_degradation_rate`         | float | ✅ Yes   | -       | Degradation rate per day                |
-| `extrapolated_rul_from_gradient` | float | ✅ Yes   | -       | RUL extrapolated from capacity gradient |
+| Parameter             | Type    | Required | Example | Description                             |
+| --------------------- | ------- | -------- | ------- | --------------------------------------- |
+| `current_capacity`    | float   | ✅ Yes   | 2.0     | Current capacity in Ahr (Ampere-hours)  |
+| `initial_capacity`    | float   | ✅ Yes   | 3.0     | Initial/Rated capacity in Ahr           |
+| `ambient_temperature` | float   | ❌ No    | 25      | Ambient temperature in °C (default: 25) |
+| `cycle_count`         | integer | ✅ Yes   | 40      | Total number of charge/discharge cycles |
+| `age_days`            | float   | ✅ Yes   | 300     | Battery age in days                     |
 
 **Request Example:**
 
@@ -123,39 +63,11 @@ curl -X GET "http://localhost:8000/api/health"
 curl -X POST "http://localhost:8000/api/predict-rul" \
   -H "Content-Type: application/json" \
   -d '{
-    "cycle_duration": 3600.0,
-    "measurement_count": 1000,
-    "voltage_mean": 3.8,
-    "voltage_std": 0.1,
-    "voltage_min": 3.5,
-    "voltage_max": 4.2,
-    "voltage_range": 0.7,
-    "voltage_drop": 0.5,
-    "current_mean": -2.0,
-    "current_std": 0.1,
-    "current_min": -2.2,
-    "current_max": -1.8,
-    "temp_mean": 25.0,
-    "temp_std": 2.0,
-    "temp_min": 23.0,
-    "temp_max": 28.0,
-    "temp_range": 5.0,
-    "power_mean": 7.6,
-    "power_max": 9.2,
-    "Capacity": 3.0,
-    "ambient_temperature": 25.0,
-    "cycle_count": 500,
-    "age_days": 365,
-    "initial_capacity": 3.4,
-    "SoH": 0.88,
-    "capacity_degradation": 0.12,
-    "capacity_slope": -0.0067,
-    "normalized_degradation_rate": -0.002,
-    "capacity_gradient_pct": 0.12,
-    "cycle_utilization": 0.833,
-    "degradation_acceleration": 0.00024,
-    "daily_degradation_rate": 0.000329,
-    "extrapolated_rul_from_gradient": 667
+    "current_capacity": 2.0,
+    "initial_capacity": 3.0,
+    "ambient_temperature": 29,
+    "cycle_count": 40,
+    "age_days": 300
   }'
 ```
 
@@ -164,16 +76,29 @@ curl -X POST "http://localhost:8000/api/predict-rul" \
 ```json
 {
   "success": true,
-  "rul_cycles": 667.5,
-  "soh": 0.88,
-  "health_status": "GOOD",
-  "health_description": "Minimal degradation, normal operation",
+  "battery_metrics": {
+    "initial_capacity_ahr": 3.0,
+    "current_capacity_ahr": 2.0,
+    "cycle_count": 40,
+    "age_days": 300,
+    "ambient_temperature_c": 29
+  },
+  "health_analysis": {
+    "soh_percentage": 66.7,
+    "health_status": "POOR",
+    "health_description": "Significant degradation, limited lifespan",
+    "degradation_factor_percent": 33.3
+  },
+  "rul_prediction": {
+    "rul_cycles": 51,
+    "estimated_days_to_eol": 385,
+    "estimated_time_to_eol": "385 days (~12.8 months)"
+  },
   "recommendations": [
-    "Suitable for primary power applications",
-    "Continue normal operation",
-    "Monitor capacity periodically"
-  ],
-  "model_r2_score": 0.92
+    "Limit to non-critical backup applications only",
+    "Schedule replacement soon",
+    "Avoid high-power draw applications"
+  ]
 }
 ```
 
@@ -181,7 +106,21 @@ curl -X POST "http://localhost:8000/api/predict-rul" \
 
 ```json
 {
-  "detail": "Prediction error: Missing required parameters"
+  "detail": "Prediction error: Current capacity must be less than or equal to initial capacity"
+}
+```
+
+**Response (422 Unprocessable Entity):**
+
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "current_capacity"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
 }
 ```
 
@@ -189,30 +128,30 @@ curl -X POST "http://localhost:8000/api/predict-rul" \
 
 ### 3. Get Battery Health Status
 
-**Endpoint:** [GET `/api/health-status/{soh}`]
+**Endpoint:** [GET `/api/health-status/{soh_percentage}`]
 
-**Description:** Get battery health status and description for a specific State of Health value.
+**Description:** Get battery health status and description for a specific State of Health percentage value.
 
 **Method:** `GET`
 
 **Path Parameters:**
 | Parameter | Type | Required | Range | Description |
 |-----------|------|----------|-------|-------------|
-| `soh` | float | ✅ Yes | 0.0-1.0 | State of Health value |
+| `soh_percentage` | float | ✅ Yes | 0-100 | State of Health as percentage (e.g., 66.7 for 66.7%) |
 
 **Request Example:**
 
 ```bash
-curl -X GET "http://localhost:8000/api/health-status/0.88"
+curl -X GET "http://localhost:8000/api/health-status/66.7"
 ```
 
 **Response (200 OK):**
 
 ```json
 {
-  "soh": 0.88,
-  "health_status": "GOOD",
-  "description": "Minimal degradation, normal operation"
+  "soh_percentage": 66.7,
+  "health_status": "POOR",
+  "health_description": "Significant degradation, limited lifespan"
 }
 ```
 
@@ -220,19 +159,19 @@ curl -X GET "http://localhost:8000/api/health-status/0.88"
 
 ```json
 {
-  "detail": "SoH must be between 0 and 1"
+  "detail": "SoH percentage must be between 0 and 100"
 }
 ```
 
 **Health Status Categories:**
 
-| Status    | SoH Range   | Description                               |
-| --------- | ----------- | ----------------------------------------- |
-| EXCELLENT | ≥ 0.95      | New or near-new condition                 |
-| GOOD      | 0.85 - 0.94 | Minimal degradation, normal operation     |
-| FAIR      | 0.70 - 0.84 | Noticeable degradation, approaching EOL   |
-| POOR      | 0.60 - 0.69 | Significant degradation, limited lifespan |
-| CRITICAL  | < 0.60      | Near end-of-life, replacement recommended |
+| Status    | SoH Range | Description                               | Degradation Level |
+| --------- | --------- | ----------------------------------------- | ----------------- |
+| EXCELLENT | 95-100%   | New or near-new condition                 | 0-5%              |
+| GOOD      | 85-94%    | Minimal degradation, normal operation     | 6-15%             |
+| FAIR      | 70-84%    | Noticeable degradation, approaching EOL   | 16-30%            |
+| POOR      | 60-69%    | Significant degradation, limited lifespan | 31-40%            |
+| CRITICAL  | < 60%     | Near end-of-life, replacement recommended | > 40%             |
 
 ---
 
@@ -240,11 +179,19 @@ curl -X GET "http://localhost:8000/api/health-status/0.88"
 
 **Endpoint:** [GET `/api/test-prediction`]
 
-**Description:** Test the prediction endpoint with pre-configured example battery data. Useful for testing and demonstration.
+**Description:** Test the prediction endpoint with pre-configured example battery data. This endpoint simulates real-world battery analysis.
 
 **Method:** `GET`
 
 **Parameters:** None
+
+**Example Data:**
+
+- Current Capacity: 2.0 Ahr
+- Initial Capacity: 3.0 Ahr
+- Cycle Count: 40 cycles
+- Age: 300 days
+- Ambient Temperature: 29°C
 
 **Request Example:**
 
@@ -257,47 +204,110 @@ curl -X GET "http://localhost:8000/api/test-prediction"
 ```json
 {
   "success": true,
-  "rul_cycles": 667.5,
-  "soh": 0.88,
-  "health_status": "GOOD",
-  "health_description": "Minimal degradation, normal operation",
+  "battery_metrics": {
+    "initial_capacity_ahr": 3.0,
+    "current_capacity_ahr": 2.0,
+    "cycle_count": 40,
+    "age_days": 300,
+    "ambient_temperature_c": 29
+  },
+  "health_analysis": {
+    "soh_percentage": 66.7,
+    "health_status": "POOR",
+    "health_description": "Significant degradation, limited lifespan",
+    "degradation_factor_percent": 33.3
+  },
+  "rul_prediction": {
+    "rul_cycles": 51,
+    "estimated_days_to_eol": 385,
+    "estimated_time_to_eol": "385 days (~12.8 months)"
+  },
   "recommendations": [
-    "Suitable for primary power applications",
-    "Continue normal operation",
-    "Monitor capacity periodically"
-  ],
-  "model_r2_score": 0.92
+    "Limit to non-critical backup applications only",
+    "Schedule replacement soon",
+    "Avoid high-power draw applications"
+  ]
 }
 ```
 
 ---
 
+## Response Fields Explanation
+
+### battery_metrics
+
+Contains the input battery parameters in a structured format:
+
+- `initial_capacity_ahr`: Initial/rated capacity in Ampere-hours
+- `current_capacity_ahr`: Current measured capacity in Ampere-hours
+- `cycle_count`: Total number of charge/discharge cycles
+- `age_days`: Battery age in days
+- `ambient_temperature_c`: Ambient temperature in Celsius
+
+### health_analysis
+
+Contains the battery health assessment:
+
+- `soh_percentage`: State of Health as a percentage (0-100%)
+- `health_status`: Categorical health status (EXCELLENT, GOOD, FAIR, POOR, CRITICAL)
+- `health_description`: Human-readable health description
+- `degradation_factor_percent`: Percentage of capacity lost due to degradation
+
+### rul_prediction
+
+Contains the remaining useful life predictions:
+
+- `rul_cycles`: Predicted remaining cycles until reaching End of Life (70% SoH)
+- `estimated_days_to_eol`: Estimated days until End of Life
+- `estimated_time_to_eol`: Human-readable format (e.g., "385 days (~12.8 months)")
+
+### recommendations
+
+Array of actionable recommendations based on battery health:
+
+- Usage limitations
+- Maintenance suggestions
+- Replacement timeline guidance
+
+---
+
 ## Health Status Recommendations
 
-### EXCELLENT (SoH ≥ 0.95)
+### EXCELLENT (SoH ≥ 95%)
 
-- Primary power source - all applications including critical ones
+**Degradation:** 0-5%
+
+- Primary power source for all applications including critical ones
 - No action needed - battery in excellent condition
+- Suitable for mission-critical operations
 
-### GOOD (SoH 0.85-0.94)
+### GOOD (SoH 85-94%)
+
+**Degradation:** 6-15%
 
 - Suitable for primary power applications
 - Continue normal operation
 - Monitor capacity periodically
 
-### FAIR (SoH 0.70-0.84)
+### FAIR (SoH 70-84%)
 
-- Acceptable for non-critical applications
+**Degradation:** 16-30%
+
+- Acceptable for non-critical applications only
 - Plan for replacement within next cycle
 - Monitor battery health closely
 
-### POOR (SoH 0.60-0.69)
+### POOR (SoH 60-69%)
+
+**Degradation:** 31-40%
 
 - Limit to non-critical backup applications only
 - Schedule replacement soon
 - Avoid high-power draw applications
 
-### CRITICAL (SoH < 0.60)
+### CRITICAL (SoH < 60%)
+
+**Degradation:** > 40%
 
 - Emergency use only - replacement urgent
 - Avoid critical applications
@@ -309,13 +319,23 @@ curl -X GET "http://localhost:8000/api/test-prediction"
 
 ### 400 Bad Request
 
-Returned when required parameters are missing or invalid.
+Returned when required parameters are missing, invalid, or prediction fails.
 
 ```json
 {
   "detail": "Prediction error: <error message>"
 }
 ```
+
+**Common scenarios:**
+
+- Current capacity greater than initial capacity
+- Negative cycle count or age
+- Missing required fields
+
+### 404 Not Found
+
+Returned when endpoint doesn't exist.
 
 ### 422 Unprocessable Entity
 
@@ -335,14 +355,13 @@ Returned when request body has validation errors.
 
 ---
 
-## Notes
+## Model Details
 
-- All numeric values should be float or integer types
-- The API uses an XGBoost model for RUL prediction
-- Features are automatically scaled using a pre-trained StandardScaler
-- The model was trained with an R² test score of ~0.92
-- Predictions are in terms of remaining cycles until battery reaches 70% SoH (End of Life threshold)
-- All requests should include proper Content-Type headers
+- **Algorithm:** XGBoost Regressor
+- **Target:** Remaining Useful Life (RUL) in cycles
+- **Training R² Score:** ~0.92
+- **End of Life Threshold:** 70% SoH (when predicted RUL reaches 0)
+- **Features:** Automatically derived from basic battery parameters
 
 ---
 
@@ -355,26 +374,27 @@ import requests
 
 url = "http://localhost:8000/api/predict-rul"
 payload = {
-    "cycle_duration": 3600.0,
-    "Capacity": 3.0,
-    "cycle_count": 500,
-    "age_days": 365,
-    "initial_capacity": 3.4,
-    "SoH": 0.88,
-    "capacity_degradation": 0.12,
-    "capacity_slope": -0.0067,
-    "normalized_degradation_rate": -0.002,
-    "capacity_gradient_pct": 0.12,
-    "cycle_utilization": 0.833,
-    "degradation_acceleration": 0.00024,
-    "daily_degradation_rate": 0.000329,
-    "extrapolated_rul_from_gradient": 667
+    "current_capacity": 2.0,
+    "initial_capacity": 3.0,
+    "ambient_temperature": 29,
+    "cycle_count": 40,
+    "age_days": 300
 }
 
 response = requests.post(url, json=payload)
 result = response.json()
-print(f"RUL: {result['rul_cycles']} cycles")
-print(f"Health Status: {result['health_status']}")
+
+if result['success']:
+    metrics = result['battery_metrics']
+    health = result['health_analysis']
+    rul = result['rul_prediction']
+
+    print(f"Current Capacity: {metrics['current_capacity_ahr']} Ahr")
+    print(f"Health Status: {health['health_status']}")
+    print(f"SoH: {health['soh_percentage']}%")
+    print(f"RUL: {rul['rul_cycles']} cycles")
+    print(f"Time to EOL: {rul['estimated_time_to_eol']}")
+    print(f"Recommendations: {', '.join(result['recommendations'])}")
 ```
 
 ### JavaScript/Node.js
@@ -382,20 +402,11 @@ print(f"Health Status: {result['health_status']}")
 ```javascript
 const url = "http://localhost:8000/api/predict-rul";
 const payload = {
-  cycle_duration: 3600.0,
-  Capacity: 3.0,
-  cycle_count: 500,
-  age_days: 365,
-  initial_capacity: 3.4,
-  SoH: 0.88,
-  capacity_degradation: 0.12,
-  capacity_slope: -0.0067,
-  normalized_degradation_rate: -0.002,
-  capacity_gradient_pct: 0.12,
-  cycle_utilization: 0.833,
-  degradation_acceleration: 0.00024,
-  daily_degradation_rate: 0.000329,
-  extrapolated_rul_from_gradient: 667,
+  current_capacity: 2.0,
+  initial_capacity: 3.0,
+  ambient_temperature: 29,
+  cycle_count: 40,
+  age_days: 300,
 };
 
 fetch(url, {
@@ -405,9 +416,34 @@ fetch(url, {
 })
   .then((res) => res.json())
   .then((data) => {
-    console.log(`RUL: ${data.rul_cycles} cycles`);
-    console.log(`Health: ${data.health_status}`);
+    if (data.success) {
+      console.log(`Health Status: ${data.health_analysis.health_status}`);
+      console.log(`SoH: ${data.health_analysis.soh_percentage}%`);
+      console.log(`RUL: ${data.rul_prediction.rul_cycles} cycles`);
+      console.log(`Time to EOL: ${data.rul_prediction.estimated_time_to_eol}`);
+    }
   });
+```
+
+### cURL
+
+```bash
+# Quick test with example data
+curl -X GET "http://localhost:8000/api/test-prediction"
+
+# With custom parameters
+curl -X POST "http://localhost:8000/api/predict-rul" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "current_capacity": 2.0,
+    "initial_capacity": 3.0,
+    "ambient_temperature": 29,
+    "cycle_count": 40,
+    "age_days": 300
+  }'
+
+# Check health status
+curl -X GET "http://localhost:8000/api/health-status/66.7"
 ```
 
 ---
@@ -421,4 +457,15 @@ Access the interactive API documentation:
 
 ---
 
+## Deployment Checklist
+
+- [ ] All required model files present (`web3_battery_rul.json`, `feature_scaler.pkl`, `model_metadata.json`)
+- [ ] FastAPI server running on correct port (default: 8000)
+- [ ] Virtual environment activated with all dependencies installed
+- [ ] CORS enabled if frontend is on different origin
+- [ ] Error logging configured
+
+---
+
 _Last Updated: February 14, 2026_
+_API Version: 2.0 - Simplified Input Interface_
