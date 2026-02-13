@@ -176,21 +176,23 @@ POST /api/predict-capacity-survey
 
 ```json
 {
-  "success": true,
-  "predicted_current_capacity": 2.45,
-  "confidence": 82.5,
-  "explanation": "Based on your survey data, the Samsung 18650 INR18650-30Q battery has likely experienced...",
-  "input_summary": {
-    "brand_model": "Samsung 18650 INR18650-30Q",
-    "initial_capacity_ahr": 3.0,
-    "years_owned": 2,
-    "primary_application": "E-bike",
-    "avg_daily_usage": "Medium",
-    "charging_frequency_per_week": 4,
-    "typical_charge_level": "20-80",
-    "avg_temperature_c": 25.0,
-    "api_key_used": "Key #1"
-  }
+    "success": true,
+    "predicted_current_capacity": 10.61,
+    "confidence": 80.0,
+    "explanation": "Battery Condition Analysis (Heuristic-Based Prediction)\n\nInput Summary:\n- Battery: Samsung 18650 INR18650-30Q\n- Initial Capacity: 12.0 Ahr\n- Ownership: 2 years\n- Primary Use: E-car\n- Daily Usage: Medium\n- Charging Pattern: 20-80\n- Operating Temp: 25.0°C\n\nDegradation Analysis:\n1. Time-based aging: 5.0% (2.5% per year baseline)\n2. Usage intensity: 3.0% (medium = 1.5% per year)\n3. Charging pattern: 0.6% (20-80 pattern)\n4. Temperature impact: 1.5% (offset from 25°C baseline)\n5. Application impact: 1.5% (E-car has higher stress)\n\nTotal Estimated Degradation: 11.6%\nPredicted State of Health (SOH): 88.4%\n\nPredicted Current Capacity: 10.61 Ahr\n\nConfidence: 80% (higher = more reliable)\n- New batteries (<1 year): Very high confidence\n- Established patterns (2-5 years): High confidence  \n- Very old batteries (>5 years): Medium confidence (unpredictable degradation)\n\nThis prediction is based on typical Li-ion degradation patterns.\nActual capacity may vary based on storage conditions and usage cycles.",
+    "input_summary": {
+        "brand_model": "Samsung 18650 INR18650-30Q",
+        "initial_capacity_ahr": 12.0,
+        "years_owned": 2,
+        "primary_application": "E-car",
+        "avg_daily_usage": "Medium",
+        "charging_frequency_per_week": 4,
+        "typical_charge_level": "20-80",
+        "avg_temperature_c": 25.0,
+        "method": "Heuristic Degradation Model (No External API)",
+        "soh_percentage": 88.4,
+        "total_degradation_percent": 11.6
+    }
 }
 ```
 
