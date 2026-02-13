@@ -5,3 +5,4 @@ feasibility real world applicability
 UI and design
 presentation and communication
 team collaboration
+critereia.txt
